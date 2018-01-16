@@ -193,6 +193,8 @@ void GraspPrecompute::execute(const tue_manipulation_msgs::GraspPrecomputeGoalCo
 
     ROS_INFO("Starting sampling...");
 
+    ros::Time start_stamp = ros::Time::now();
+
     /// Try to determine a trajectory
     while(ros::ok() && !grasp_feasible && !sampling_boundaries_reached )
     {
@@ -261,6 +263,8 @@ void GraspPrecompute::execute(const tue_manipulation_msgs::GraspPrecomputeGoalCo
         /// If we have a pre-grasp vector, compute the rest of the path
         if (num_grasp_points > 1 && grasp_feasible)
         {
+            ros::Time approach_start_stamp = ros::Time::now();
+
             moveit_msgs::RobotState start_state;
             start_state.joint_state.name = my_plan.trajectory_.joint_trajectory.joint_names;
             unsigned int size = my_plan.trajectory_.joint_trajectory.points.size();
@@ -327,6 +331,9 @@ void GraspPrecompute::execute(const tue_manipulation_msgs::GraspPrecomputeGoalCo
                     my_plan.trajectory_.joint_trajectory.points.push_back(my_second_plan.trajectory_.joint_trajectory.points[i]);
                 }
             }
+
+            ros::Time approach_end_stamp = ros::Time::now();
+            ROS_INFO("Approach took %.2f seconds", (approach_end_stamp - approach_start_stamp).toSec());
         }
 
         /// If grasp not feasible, resample yaw
@@ -368,6 +375,9 @@ void GraspPrecompute::execute(const tue_manipulation_msgs::GraspPrecomputeGoalCo
         }
     }
 
+    ros::Time planning_stamp = ros::Time::now();
+    ROS_DEBUG("Planning took %.2f seconds", (planning_stamp - start_stamp).toSec());
+
     /// Planning succeeded, so execute it!
     if (moveit_group_->execute(my_plan) == moveit_msgs::MoveItErrorCodes::SUCCESS)
     {
@@ -377,6 +387,12 @@ void GraspPrecompute::execute(const tue_manipulation_msgs::GraspPrecomputeGoalCo
     {
         grasp_feasible = false;
     }
+
+    ros::Time execution_stamp = ros::Time::now();
+    ROS_DEBUG("Execution took %.2f seconds", (execution_stamp - planning_stamp).toSec());
+    ROS_INFO("Planning: %.2f seconds, execution: %.2f seconds", (planning_stamp - start_stamp).toSec(), (execution_stamp - planning_stamp).toSec());
+
+    std::cout << "Planning: " << (planning_stamp - start_stamp).toSec() << "seconds, execution: " << (execution_stamp - planning_stamp).toSec() << "seconds" << std::endl;
 
     if (grasp_feasible)
     {
