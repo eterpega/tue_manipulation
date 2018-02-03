@@ -253,15 +253,9 @@ void GraspPrecompute::execute(const tue_manipulation_msgs::GraspPrecomputeGoalCo
             grasp_feasible = computeStraightLineTrajectory(waypoints[num_grasp_points-1], waypoints[0], my_second_plan);
 
             // If still feasible and the entire trajectory is to be executed (FIRST_JOINT_POS_ONLY is false), append trajectory
-            // ToDo: make nice!
-            unsigned int size = my_plan.trajectory_.joint_trajectory.points.size();
             if (grasp_feasible && !goal->FIRST_JOINT_POS_ONLY)
             {
-                for (unsigned int i = 1; i < my_second_plan.trajectory_.joint_trajectory.points.size(); i++)
-                {
-                    my_second_plan.trajectory_.joint_trajectory.points[i].time_from_start += my_plan.trajectory_.joint_trajectory.points[size-1].time_from_start;
-                    my_plan.trajectory_.joint_trajectory.points.push_back(my_second_plan.trajectory_.joint_trajectory.points[i]);
-                }
+                appendTrajectories(my_plan, my_second_plan);
             }
 
             ros::Time approach_end_stamp = ros::Time::now();
@@ -424,4 +418,17 @@ void GraspPrecompute::setStartStateToTrajectoryEndPoint(const moveit_msgs::Robot
     unsigned int size = trajectory.joint_trajectory.points.size();
     start_state.joint_state.position = trajectory.joint_trajectory.points[size-1].positions;
     moveit_group->setStartState(start_state);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+void GraspPrecompute::appendTrajectories(moveit::planning_interface::MoveGroupInterface::Plan& plan1, moveit::planning_interface::MoveGroupInterface::Plan& plan2) const
+{
+    unsigned int size1 = plan1.trajectory_.joint_trajectory.points.size();
+    ros::Duration time_offset = plan1.trajectory_.joint_trajectory.points[size1-1].time_from_start;
+    for (unsigned int i = 1; i < plan2.trajectory_.joint_trajectory.points.size(); i++)
+    {
+        plan2.trajectory_.joint_trajectory.points[i].time_from_start += time_offset;
+        plan1.trajectory_.joint_trajectory.points.push_back(plan2.trajectory_.joint_trajectory.points[i]);
+    }
 }

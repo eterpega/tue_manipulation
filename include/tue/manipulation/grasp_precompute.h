@@ -26,6 +26,9 @@ public:
 
 private:
 
+    /** Cartesian goal callback function */
+    void execute(const tue_manipulation_msgs::GraspPrecomputeGoalConstPtr& goal);
+
     /**
      * @brief precomputeApproach Computes the approach vector towards the grasp pose
      * @param grasp_pose final pose
@@ -63,13 +66,17 @@ private:
      */
     void setStartStateToTrajectoryEndPoint(const moveit_msgs::RobotTrajectory &trajectory, std::shared_ptr<moveit::planning_interface::MoveGroupInterface> moveit_group);
 
+    /**
+     * @brief appendTrajectories appends two trajectories
+     * @param plan1 first trajectory. The result will also be stored here
+     * @param plan2 second trajectory that will be appended to the first one
+     */
+    void appendTrajectories(moveit::planning_interface::MoveGroupInterface::Plan& plan1, moveit::planning_interface::MoveGroupInterface::Plan &plan2) const;
+
 private:
 
     /** Cartesian goal Action server */
     std::shared_ptr<actionlib::SimpleActionServer<tue_manipulation_msgs::GraspPrecomputeAction>> as_;
-
-    /** Cartesian goal callback function */
-    void execute(const tue_manipulation_msgs::GraspPrecomputeGoalConstPtr& goal);
 
     /** TF listener */
     std::shared_ptr<tf::TransformListener> listener_;
