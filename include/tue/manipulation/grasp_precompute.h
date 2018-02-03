@@ -26,6 +26,10 @@ public:
 
 private:
 
+    bool computeStraightLineTrajectory(const geometry_msgs::Pose &start_pose, const geometry_msgs::Pose &goal_pose, moveit_msgs::RobotTrajectory& cartesian_moveit_trajectory);
+
+private:
+
     /** Cartesian goal Action server */
     std::shared_ptr<actionlib::SimpleActionServer<tue_manipulation_msgs::GraspPrecomputeAction>> as_;
 

@@ -286,44 +286,47 @@ void GraspPrecompute::execute(const tue_manipulation_msgs::GraspPrecomputeGoalCo
 //            GRASP_FEASIBLE = group->plan(my_second_plan);
 
             // Alternative: 'computeCartesianPath' approach
-            std::vector<geometry_msgs::Pose> wps(2);
-            wps[0] = waypoints[num_grasp_points-1];
-            wps[1] = waypoints[0];
             moveit_msgs::RobotTrajectory cartesian_moveit_trajectory;
-            double res = moveit_group_->computeCartesianPath(wps, 0.01, 10.0, cartesian_moveit_trajectory, false);
-            // Check if more than 90% of the trajectory has been computed
-            if (res > 0.9)
-            {
-                grasp_feasible = true;
-            } else{
-                grasp_feasible = false;
-            }
+            grasp_feasible = computeStraightLineTrajectory(waypoints[num_grasp_points-1], waypoints[0], cartesian_moveit_trajectory);
 
-            /// Interpolate to get velocities
-            // First to create a RobotTrajectory object
-            robot_trajectory::RobotTrajectory rt(moveit_group_->getCurrentState()->getRobotModel(), moveit_group_->getName());
+//            std::vector<geometry_msgs::Pose> wps(2);
+//            wps[0] = waypoints[num_grasp_points-1];
+//            wps[1] = waypoints[0];
+//            moveit_msgs::RobotTrajectory cartesian_moveit_trajectory;
+//            double res = moveit_group_->computeCartesianPath(wps, 0.01, 10.0, cartesian_moveit_trajectory, false);
+//            // Check if more than 90% of the trajectory has been computed
+//            if (res > 0.9)
+//            {
+//                grasp_feasible = true;
+//            } else{
+//                grasp_feasible = false;
+//            }
 
-            // Second get a RobotTrajectory from trajectory
-            robot_state::RobotState rs(moveit_group_->getCurrentState()->getRobotModel());
-            for (unsigned int i = 0; i < cartesian_moveit_trajectory.joint_trajectory.joint_names.size(); i++){
-                rs.setJointPositions(cartesian_moveit_trajectory.joint_trajectory.joint_names[i], &cartesian_moveit_trajectory.joint_trajectory.points[0].positions[i]);
-            }
-            rt.setRobotTrajectoryMsg(rs, cartesian_moveit_trajectory);
+//            /// Interpolate to get velocities
+//            // First to create a RobotTrajectory object
+//            robot_trajectory::RobotTrajectory rt(moveit_group_->getCurrentState()->getRobotModel(), moveit_group_->getName());
 
-            // Third create a IterativeParabolicTimeParameterization object
-            trajectory_processing::IterativeParabolicTimeParameterization iptp;
+//            // Second get a RobotTrajectory from trajectory
+//            robot_state::RobotState rs(moveit_group_->getCurrentState()->getRobotModel());
+//            for (unsigned int i = 0; i < cartesian_moveit_trajectory.joint_trajectory.joint_names.size(); i++){
+//                rs.setJointPositions(cartesian_moveit_trajectory.joint_trajectory.joint_names[i], &cartesian_moveit_trajectory.joint_trajectory.points[0].positions[i]);
+//            }
+//            rt.setRobotTrajectoryMsg(rs, cartesian_moveit_trajectory);
 
-            // Fourth compute computeTimeStamps
-            if (!iptp.computeTimeStamps(rt)){
-                ROS_WARN("Failed to calculate velocities for cartesian path.");
-                grasp_feasible = false;
-            }
+//            // Third create a IterativeParabolicTimeParameterization object
+//            trajectory_processing::IterativeParabolicTimeParameterization iptp;
+
+//            // Fourth compute computeTimeStamps
+//            if (!iptp.computeTimeStamps(rt)){
+//                ROS_WARN("Failed to calculate velocities for cartesian path.");
+//                grasp_feasible = false;
+//            }
 
             // If still feasible and the entire trajectory is to be executed (FIRST_JOINT_POS_ONLY is false), append trajectory
             // ToDo: make nice!
             if (grasp_feasible && !goal->FIRST_JOINT_POS_ONLY)
             {
-                rt.getRobotTrajectoryMsg(cartesian_moveit_trajectory);
+//                rt.getRobotTrajectoryMsg(cartesian_moveit_trajectory);
                 my_second_plan.trajectory_ = cartesian_moveit_trajectory;
                 for (unsigned int i = 1; i < my_second_plan.trajectory_.joint_trajectory.points.size(); i++)
                 {
@@ -406,3 +409,43 @@ void GraspPrecompute::execute(const tue_manipulation_msgs::GraspPrecomputeGoalCo
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+
+bool GraspPrecompute::computeStraightLineTrajectory(const geometry_msgs::Pose& start_pose, const geometry_msgs::Pose& goal_pose, moveit_msgs::RobotTrajectory& cartesian_moveit_trajectory)
+{
+    // ToDo: update C++ vector
+    std::vector<geometry_msgs::Pose> wps(2);
+    wps[0] = start_pose;
+    wps[1] = goal_pose;
+
+//    moveit_msgs::RobotTrajectory cartesian_moveit_trajectory;
+    double res = moveit_group_->computeCartesianPath(wps, 0.01, 10.0, cartesian_moveit_trajectory, false);
+    // Check if more than 90% of the trajectory has been computed
+    if (res < 0.9)
+    {
+        ROS_WARN("Failed to compute Cartesian path");
+        return false;
+    }
+
+    /// Interpolate to get velocities
+    // First to create a RobotTrajectory object
+    robot_trajectory::RobotTrajectory rt(moveit_group_->getCurrentState()->getRobotModel(), moveit_group_->getName());
+
+    // Second get a RobotTrajectory from trajectory
+    robot_state::RobotState rs(moveit_group_->getCurrentState()->getRobotModel());
+    for (unsigned int i = 0; i < cartesian_moveit_trajectory.joint_trajectory.joint_names.size(); i++){
+        rs.setJointPositions(cartesian_moveit_trajectory.joint_trajectory.joint_names[i], &cartesian_moveit_trajectory.joint_trajectory.points[0].positions[i]);
+    }
+    rt.setRobotTrajectoryMsg(rs, cartesian_moveit_trajectory);
+
+    // Third create a IterativeParabolicTimeParameterization object
+    trajectory_processing::IterativeParabolicTimeParameterization iptp;
+
+    // Fourth compute computeTimeStamps
+    if (!iptp.computeTimeStamps(rt)){
+        ROS_WARN("Failed to calculate velocities for cartesian path.");
+        return false;
+    } else {
+        rt.getRobotTrajectoryMsg(cartesian_moveit_trajectory);
+    }
+
+}
