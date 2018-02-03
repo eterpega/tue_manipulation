@@ -183,8 +183,8 @@ void GraspPrecompute::execute(const tue_manipulation_msgs::GraspPrecomputeGoalCo
     tf::Transform grasp_pose;
     tf::poseMsgToTF(stamped_in.pose,grasp_pose);
 
-    tf::Transform new_grasp_pose;
-    tf::Transform new_pre_grasp_pose;
+//    tf::Transform new_grasp_pose;
+//    tf::Transform new_pre_grasp_pose;
 
     bool grasp_feasible = false;
     bool sampling_boundaries_reached = false;
@@ -206,22 +206,25 @@ void GraspPrecompute::execute(const tue_manipulation_msgs::GraspPrecomputeGoalCo
             return;
         }
 
-        // Define new_grasp_pose
-        ROS_INFO("Computing new grasp pose...");
-        tf::Transform yaw_offset(tf::createQuaternionFromYaw(yaw_sampling_direction * yaw_delta),tf::Point(0,0,0));
-        new_grasp_pose = grasp_pose * yaw_offset;
-
-        ROS_INFO("Computing intermediate points...");
+        // Compute new approach vector
         std::vector<geometry_msgs::Pose> waypoints(num_grasp_points);
-        for (int i = num_grasp_points - 1; i >= 0; --i) {
+        precomputeApproach(grasp_pose, yaw_sampling_direction * yaw_delta, num_grasp_points, pre_grasp_inbetween_sampling_steps, waypoints);
 
-            //cout << i << " offset = " << -PRE_GRASP_DELTA*i/(PRE_GRASP_INBETWEEN_SAMPLING_STEPS+1.0) << endl;
-            tf::Transform pre_grasp_offset(tf::Quaternion(0,0,0,1),tf::Point(-pre_grasp_delta_*i/(pre_grasp_inbetween_sampling_steps+1.0),0,0));
-            new_pre_grasp_pose = new_grasp_pose * pre_grasp_offset;
+//        ROS_INFO("Computing new grasp pose...");
+//        tf::Transform yaw_offset(tf::createQuaternionFromYaw(yaw_sampling_direction * yaw_delta),tf::Point(0,0,0));
+//        new_grasp_pose = grasp_pose * yaw_offset;
 
-            tf::poseTFToMsg(new_pre_grasp_pose, waypoints[i]);
+//        ROS_INFO("Computing intermediate points...");
+//        std::vector<geometry_msgs::Pose> waypoints(num_grasp_points);
+//        for (int i = num_grasp_points - 1; i >= 0; --i) {
 
-        }
+//            //cout << i << " offset = " << -PRE_GRASP_DELTA*i/(PRE_GRASP_INBETWEEN_SAMPLING_STEPS+1.0) << endl;
+//            tf::Transform pre_grasp_offset(tf::Quaternion(0,0,0,1),tf::Point(-pre_grasp_delta_*i/(pre_grasp_inbetween_sampling_steps+1.0),0,0));
+//            new_pre_grasp_pose = new_grasp_pose * pre_grasp_offset;
+
+//            tf::poseTFToMsg(new_pre_grasp_pose, waypoints[i]);
+
+//        }
 
         // ToDo: reverse vector for clarity???
         
@@ -241,18 +244,19 @@ void GraspPrecompute::execute(const tue_manipulation_msgs::GraspPrecomputeGoalCo
             /// Compute a plan to the first waypoint
             ros::Duration(0.1).sleep(); // Make sure the robot is at the robot state before setStartState is called
             moveit_group_->setStartStateToCurrentState();
-            moveit_group_->setPoseTarget(waypoints[num_grasp_points-1]);
-            moveit_group_->setGoalPositionTolerance(0.01);
-            moveit_group_->setGoalOrientationTolerance(0.1);
-//          ROS_INFO("x: %f, y: %f, z: %f", waypoints[num_grasp_points-1].position.x, waypoints[num_grasp_points-1].position.y, waypoints[num_grasp_points-1].position.z);
-            if (moveit_group_->plan(my_plan) == moveit_msgs::MoveItErrorCodes::SUCCESS)
-            {
-                grasp_feasible = true;
-            }
-            else
-            {
-                grasp_feasible = false;
-            }
+            grasp_feasible = planTrajectory(waypoints[num_grasp_points-1], my_plan);
+//            moveit_group_->setPoseTarget(waypoints[num_grasp_points-1]);
+//            moveit_group_->setGoalPositionTolerance(0.01);
+//            moveit_group_->setGoalOrientationTolerance(0.1);
+////          ROS_INFO("x: %f, y: %f, z: %f", waypoints[num_grasp_points-1].position.x, waypoints[num_grasp_points-1].position.y, waypoints[num_grasp_points-1].position.z);
+//            if (moveit_group_->plan(my_plan) == moveit_msgs::MoveItErrorCodes::SUCCESS)
+//            {
+//                grasp_feasible = true;
+//            }
+//            else
+//            {
+//                grasp_feasible = false;
+//            }
 //          ROS_INFO("Grasp feasible: %i", grasp_feasible);
         }
         else
@@ -410,7 +414,61 @@ void GraspPrecompute::execute(const tue_manipulation_msgs::GraspPrecomputeGoalCo
 
 ////////////////////////////////////////////////////////////////////////////////
 
-bool GraspPrecompute::computeStraightLineTrajectory(const geometry_msgs::Pose& start_pose, const geometry_msgs::Pose& goal_pose, moveit_msgs::RobotTrajectory& cartesian_moveit_trajectory)
+void GraspPrecompute::precomputeApproach(tf::Transform& grasp_pose, double yaw_angle,
+                                         int num_grasp_points, unsigned int pre_grasp_inbetween_sampling_steps,
+                                         std::vector<geometry_msgs::Pose>& waypoints)
+{
+
+    tf::Transform new_grasp_pose;
+    tf::Transform new_pre_grasp_pose;
+
+    /// Test
+    ROS_INFO("Testing input...");
+    geometry_msgs::Pose bla;
+    poseTFToMsg(grasp_pose, bla);
+    ///
+
+    // Define new_grasp_pose
+    ROS_INFO("Computing new grasp pose...");
+    tf::Transform yaw_offset(tf::createQuaternionFromYaw(yaw_angle), tf::Point(0, 0, 0));
+    new_grasp_pose = grasp_pose * yaw_offset;
+    /// Test
+    geometry_msgs::Pose blaat;
+    poseTFToMsg(new_grasp_pose, blaat);
+    ///
+
+    ROS_INFO("Computing intermediate points...");
+//    std::vector<geometry_msgs::Pose> waypoints(num_grasp_points);
+    for (int i = num_grasp_points - 1; i >= 0; --i) {
+
+        //cout << i << " offset = " << -PRE_GRASP_DELTA*i/(PRE_GRASP_INBETWEEN_SAMPLING_STEPS+1.0) << endl;
+        tf::Transform pre_grasp_offset(tf::Quaternion(0, 0, 0, 1),
+                                       tf::Point(-pre_grasp_delta_ * i / (pre_grasp_inbetween_sampling_steps + 1.0), 0, 0));
+        new_pre_grasp_pose = new_grasp_pose * pre_grasp_offset;
+
+        tf::poseTFToMsg(new_pre_grasp_pose, waypoints[i]);
+
+    }
+
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+bool GraspPrecompute::planTrajectory(const geometry_msgs::Pose &goal_pose, moveit::planning_interface::MoveGroupInterface::Plan& plan)
+{
+    moveit_group_->setPoseTarget(goal_pose);
+    moveit_group_->setGoalPositionTolerance(0.01);
+    moveit_group_->setGoalOrientationTolerance(0.1);
+    ROS_INFO("x: %f, y: %f, z: %f", goal_pose.position.x, goal_pose.position.y, goal_pose.position.z);
+    return (moveit_group_->plan(plan) == moveit_msgs::MoveItErrorCodes::SUCCESS);
+
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+bool GraspPrecompute::computeStraightLineTrajectory(const geometry_msgs::Pose& start_pose,
+                                                    const geometry_msgs::Pose& goal_pose,
+                                                    moveit_msgs::RobotTrajectory& cartesian_moveit_trajectory)
 {
     // ToDo: update C++ vector
     std::vector<geometry_msgs::Pose> wps(2);

@@ -26,6 +26,34 @@ public:
 
 private:
 
+    /**
+     * @brief precomputeApproach Computes the approach vector towards the grasp pose
+     * @param grasp_pose final pose
+     * @param yaw_angle yaw angle from which the grasp pose will be approached
+     * @param num_grasp_points number of intermediate points of the grasp vector
+     * @param pre_grasp_inbetween_sampling_steps distance between sampling steps
+     * @param waypoints vector where the waypoints (including goal pose) will be stored
+     */
+    void precomputeApproach(tf::Transform& grasp_pose, double yaw_angle, int num_grasp_points,
+                            unsigned int pre_grasp_inbetween_sampling_steps, std::vector<geometry_msgs::Pose>& waypoints);
+
+    /**
+     * @brief planTrajectory computes a joint trajectory towards the goal pose.
+     * Note: it is assumed that the moveit group is already in a suitable start configuration.
+     * @param goal_pose goal pose of the motion
+     * @param plan the computed trajectory will be stored here
+     * @return bool indicating success
+     */
+    bool planTrajectory(const geometry_msgs::Pose &goal_pose, moveit::planning_interface::MoveGroupInterface::Plan& plan);
+
+    /**
+     * @brief computeStraightLineTrajectory computes a straight line joint trajectory between the Cartesian start and goal poses.
+     * Note: it is assumed that the moveit group is already in a suitable start configuration.
+     * @param start_pose start pose of the motions
+     * @param goal_pose goal pose of the motion
+     * @param cartesian_moveit_trajectory the computed trajectory will be stored here
+     * @return bool indicating success
+     */
     bool computeStraightLineTrajectory(const geometry_msgs::Pose &start_pose, const geometry_msgs::Pose &goal_pose, moveit_msgs::RobotTrajectory& cartesian_moveit_trajectory);
 
 private:
