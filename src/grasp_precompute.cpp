@@ -446,6 +446,7 @@ bool GraspPrecompute::computeStraightLineTrajectory(const geometry_msgs::Pose& s
         return false;
     } else {
         rt.getRobotTrajectoryMsg(cartesian_moveit_trajectory);
+        return true;
     }
 
 }
