@@ -253,15 +253,12 @@ void GraspPrecompute::execute(const tue_manipulation_msgs::GraspPrecomputeGoalCo
 //            GRASP_FEASIBLE = group->plan(my_second_plan);
 
             // Alternative: 'computeCartesianPath' approach
-            moveit_msgs::RobotTrajectory cartesian_moveit_trajectory;
-            grasp_feasible = computeStraightLineTrajectory(waypoints[num_grasp_points-1], waypoints[0], cartesian_moveit_trajectory);
+            grasp_feasible = computeStraightLineTrajectory(waypoints[num_grasp_points-1], waypoints[0], my_second_plan);
 
             // If still feasible and the entire trajectory is to be executed (FIRST_JOINT_POS_ONLY is false), append trajectory
             // ToDo: make nice!
             if (grasp_feasible && !goal->FIRST_JOINT_POS_ONLY)
             {
-//                rt.getRobotTrajectoryMsg(cartesian_moveit_trajectory);
-                my_second_plan.trajectory_ = cartesian_moveit_trajectory;
                 for (unsigned int i = 1; i < my_second_plan.trajectory_.joint_trajectory.points.size(); i++)
                 {
                     my_second_plan.trajectory_.joint_trajectory.points[i].time_from_start += my_plan.trajectory_.joint_trajectory.points[size-1].time_from_start;
@@ -279,9 +276,9 @@ void GraspPrecompute::execute(const tue_manipulation_msgs::GraspPrecomputeGoalCo
             ROS_DEBUG("Not all grasp points feasible: resampling yaw");
             if (yaw_sampling_direction > 0)
             {
-                yaw_delta = yaw_delta + yaw_sampling_step_;
+                yaw_delta += yaw_sampling_step_;
             }
-            yaw_sampling_direction = -1 * yaw_sampling_direction;
+            yaw_sampling_direction *= -1;
 
             if(yaw_delta > max_yaw_)
             {
@@ -377,14 +374,14 @@ bool GraspPrecompute::planTrajectory(const geometry_msgs::Pose &goal_pose, movei
 
 bool GraspPrecompute::computeStraightLineTrajectory(const geometry_msgs::Pose& start_pose,
                                                     const geometry_msgs::Pose& goal_pose,
-                                                    moveit_msgs::RobotTrajectory& cartesian_moveit_trajectory)
+                                                    moveit::planning_interface::MoveGroupInterface::Plan &plan)
 {
     // ToDo: update C++ vector
     std::vector<geometry_msgs::Pose> wps(2);
     wps[0] = start_pose;
     wps[1] = goal_pose;
 
-//    moveit_msgs::RobotTrajectory cartesian_moveit_trajectory;
+    moveit_msgs::RobotTrajectory cartesian_moveit_trajectory;
     double res = moveit_group_->computeCartesianPath(wps, 0.01, 10.0, cartesian_moveit_trajectory, false);
     // Check if more than 90% of the trajectory has been computed
     if (res < 0.9)
@@ -413,6 +410,7 @@ bool GraspPrecompute::computeStraightLineTrajectory(const geometry_msgs::Pose& s
         return false;
     } else {
         rt.getRobotTrajectoryMsg(cartesian_moveit_trajectory);
+        plan.trajectory_ = cartesian_moveit_trajectory;
         return true;
     }
 
