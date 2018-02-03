@@ -73,6 +73,19 @@ private:
      */
     void appendTrajectories(moveit::planning_interface::MoveGroupInterface::Plan& plan1, moveit::planning_interface::MoveGroupInterface::Plan &plan2) const;
 
+    /**
+     * @brief updateDeltaGoal Updates the goal if a delta goal is requested
+     * @param goal incoming goal definition
+     * @param stamped_in goal pose will be stored here
+     */
+    void updateDeltaGoal(const tue_manipulation_msgs::GraspPrecomputeGoalConstPtr& goal, geometry_msgs::PoseStamped& goal_stamped_pose);
+
+    /**
+     * @brief applyJointLimits make sure the trajectory is between the joint limits
+     * @param plan trajectory to which limits are applied
+     */
+    void applyJointLimits(moveit::planning_interface::MoveGroupInterface::Plan &plan);
+
 private:
 
     /** Cartesian goal Action server */

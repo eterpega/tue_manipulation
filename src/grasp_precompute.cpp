@@ -124,53 +124,17 @@ void GraspPrecompute::execute(const tue_manipulation_msgs::GraspPrecomputeGoalCo
     }
 
     /// Create input variable which we will work with
-    geometry_msgs::PoseStamped stamped_in;
-    stamped_in.header = goal->goal.header;
-    stamped_in.pose.position.x = goal->goal.x;
-    stamped_in.pose.position.y = goal->goal.y;
-    stamped_in.pose.position.z = goal->goal.z;
-    stamped_in.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(goal->goal.roll, goal->goal.pitch, goal->goal.yaw);
+    geometry_msgs::PoseStamped goal_pose_stamped;
+    goal_pose_stamped.header = goal->goal.header;
+    goal_pose_stamped.pose.position.x = goal->goal.x;
+    goal_pose_stamped.pose.position.y = goal->goal.y;
+    goal_pose_stamped.pose.position.z = goal->goal.z;
+    goal_pose_stamped.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(goal->goal.roll, goal->goal.pitch, goal->goal.yaw);
 
     /// Check if a delta is requested
     if(delta_requested)
     {
-        ROS_DEBUG("Delta requested of x=%f \t y=%f \t z=%f \t roll=%f \t pitch=%f \t yaw=%f",goal->delta.x,goal->delta.y,goal->delta.z,goal->delta.roll,goal->delta.pitch,goal->delta.yaw);
-        // Create tmp variable
-        tf::StampedTransform tmp;
-
-        // Lookup the current vector of the desired TF to the grippoint
-        if(listener_->waitForTransform(goal->delta.header.frame_id, tip_link_, goal->delta.header.stamp, ros::Duration(1.0)))
-        {
-            try
-            {
-                listener_->lookupTransform(goal->delta.header.frame_id, tip_link_, goal->delta.header.stamp, tmp);
-            }
-            catch (tf::TransformException ex)
-            {
-                as_->setAborted();
-                ROS_ERROR("%s",ex.what());
-                return;
-            }
-        } else
-        {
-            as_->setAborted();
-            ROS_ERROR("grasp_precompute_action: listener__ could not find transform from gripper to %s:",goal->delta.header.frame_id.c_str());
-            return;
-        }
-
-        // Print the transform
-        ROS_DEBUG("tmp.x=%f \t tmp.y=%f \t tmp.z=%f tmp.X=%f \t tmp.Y=%f \t tmp.Z=%f \t tmp.W=%f",tmp.getOrigin().getX(),tmp.getOrigin().getY(),tmp.getOrigin().getZ(),tmp.getRotation().getX(),tmp.getRotation().getY(),tmp.getRotation().getZ(),tmp.getRotation().getW());
-
-        // Add the delta values and overwrite input variable
-        ROS_INFO("Child frame id=%s", tmp.frame_id_.c_str());
-        stamped_in.header.frame_id  = tmp.frame_id_;
-        stamped_in.header.stamp     = tmp.stamp_;
-        stamped_in.pose.position.x  = tmp.getOrigin().getX() + goal->delta.x;
-        stamped_in.pose.position.y  = tmp.getOrigin().getY() + goal->delta.y;
-        stamped_in.pose.position.z  = tmp.getOrigin().getZ() + goal->delta.z;
-        double roll, pitch, yaw;
-        tmp.getBasis().getRPY(roll, pitch, yaw);
-        stamped_in.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(roll + goal->delta.roll, pitch + goal->delta.pitch, yaw + goal->delta.yaw);
+        updateDeltaGoal(goal, goal_pose_stamped);
     }
 
     /// Check if a pre-grasp is required
@@ -181,7 +145,7 @@ void GraspPrecompute::execute(const tue_manipulation_msgs::GraspPrecomputeGoalCo
 
     /// Evaluate if grasp is feasible
     tf::Transform grasp_pose;
-    tf::poseMsgToTF(stamped_in.pose,grasp_pose);
+    tf::poseMsgToTF(goal_pose_stamped.pose, grasp_pose);
 
     bool grasp_feasible = false;
     bool sampling_boundaries_reached = false;
@@ -285,21 +249,22 @@ void GraspPrecompute::execute(const tue_manipulation_msgs::GraspPrecomputeGoalCo
 
     // ToDo: make nice
 
-    /// Double check joint limits (MoveIt might provide trajectories that are just outside the bounds
-    // Loop over all joints
-    for (unsigned int i = 0; i < my_plan.trajectory_.joint_trajectory.joint_names.size(); i++)
-    {
-        std::string joint_name = my_plan.trajectory_.joint_trajectory.joint_names[i];
-        limits climits = joint_limits_[joint_name];
+    /// Double check joint limits (MoveIt might provide trajectories that are just outside the bounds)
+    applyJointLimits(my_plan);
+//    // Loop over all joints
+//    for (unsigned int i = 0; i < my_plan.trajectory_.joint_trajectory.joint_names.size(); i++)
+//    {
+//        std::string joint_name = my_plan.trajectory_.joint_trajectory.joint_names[i];
+//        limits climits = joint_limits_[joint_name];
 
-        // Loop over all trajectory points
-        for (unsigned int j = 0; j < my_plan.trajectory_.joint_trajectory.points.size(); j++)
-        {
-            my_plan.trajectory_.joint_trajectory.points[j].positions[i] = std::min(std::max(climits.lower,
-                                                                                  my_plan.trajectory_.joint_trajectory.points[j].positions[i]),
-                                                                         climits.upper);
-        }
-    }
+//        // Loop over all trajectory points
+//        for (unsigned int j = 0; j < my_plan.trajectory_.joint_trajectory.points.size(); j++)
+//        {
+//            my_plan.trajectory_.joint_trajectory.points[j].positions[i] = std::min(std::max(climits.lower,
+//                                                                                  my_plan.trajectory_.joint_trajectory.points[j].positions[i]),
+//                                                                         climits.upper);
+//        }
+//    }
 
     ros::Time planning_stamp = ros::Time::now();
     ROS_DEBUG("Planning took %.2f seconds", (planning_stamp - start_stamp).toSec());
@@ -430,5 +395,70 @@ void GraspPrecompute::appendTrajectories(moveit::planning_interface::MoveGroupIn
     {
         plan2.trajectory_.joint_trajectory.points[i].time_from_start += time_offset;
         plan1.trajectory_.joint_trajectory.points.push_back(plan2.trajectory_.joint_trajectory.points[i]);
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+void GraspPrecompute::updateDeltaGoal(const tue_manipulation_msgs::GraspPrecomputeGoalConstPtr& goal, geometry_msgs::PoseStamped& goal_stamped_pose)
+{
+    ROS_DEBUG("Delta requested of x=%f \t y=%f \t z=%f \t roll=%f \t pitch=%f \t yaw=%f",
+              goal->delta.x, goal->delta.y, goal->delta.z,
+              goal->delta.roll, goal->delta.pitch, goal->delta.yaw);
+    // Create tmp variable
+    tf::StampedTransform tmp;
+
+    // Lookup the current vector of the desired TF to the grippoint
+    if(listener_->waitForTransform(goal->delta.header.frame_id, tip_link_, goal->delta.header.stamp, ros::Duration(1.0)))
+    {
+        try
+        {
+            listener_->lookupTransform(goal->delta.header.frame_id, tip_link_, goal->delta.header.stamp, tmp);
+        }
+        catch (tf::TransformException ex)
+        {
+            as_->setAborted();
+            ROS_ERROR("%s",ex.what());
+            return;
+        }
+    } else
+    {
+        as_->setAborted();
+        ROS_ERROR("grasp_precompute_action: listener__ could not find transform from gripper to %s:",goal->delta.header.frame_id.c_str());
+        return;
+    }
+
+    // Print the transform
+    ROS_DEBUG("tmp.x=%f \t tmp.y=%f \t tmp.z=%f tmp.X=%f \t tmp.Y=%f \t tmp.Z=%f \t tmp.W=%f",tmp.getOrigin().getX(),tmp.getOrigin().getY(),tmp.getOrigin().getZ(),tmp.getRotation().getX(),tmp.getRotation().getY(),tmp.getRotation().getZ(),tmp.getRotation().getW());
+
+    // Add the delta values and overwrite input variable
+    ROS_INFO("Child frame id=%s", tmp.frame_id_.c_str());
+    goal_stamped_pose.header.frame_id  = tmp.frame_id_;
+    goal_stamped_pose.header.stamp     = tmp.stamp_;
+    goal_stamped_pose.pose.position.x  = tmp.getOrigin().getX() + goal->delta.x;
+    goal_stamped_pose.pose.position.y  = tmp.getOrigin().getY() + goal->delta.y;
+    goal_stamped_pose.pose.position.z  = tmp.getOrigin().getZ() + goal->delta.z;
+    double roll, pitch, yaw;
+    tmp.getBasis().getRPY(roll, pitch, yaw);
+    goal_stamped_pose.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(roll + goal->delta.roll, pitch + goal->delta.pitch, yaw + goal->delta.yaw);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+void GraspPrecompute::applyJointLimits(moveit::planning_interface::MoveGroupInterface::Plan &plan)
+{
+    // Loop over all joints
+    for (unsigned int i = 0; i < plan.trajectory_.joint_trajectory.joint_names.size(); i++)
+    {
+        std::string joint_name = plan.trajectory_.joint_trajectory.joint_names[i];
+        limits climits = joint_limits_[joint_name];
+
+        // Loop over all trajectory points
+        for (unsigned int j = 0; j < plan.trajectory_.joint_trajectory.points.size(); j++)
+        {
+            plan.trajectory_.joint_trajectory.points[j].positions[i] = std::min(std::max(climits.lower,
+                                                                                         plan.trajectory_.joint_trajectory.points[j].positions[i]),
+                                                                                climits.upper);
+        }
     }
 }
