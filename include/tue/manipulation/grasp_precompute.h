@@ -51,11 +51,17 @@ private:
      * Note: it is assumed that the moveit group is already in a suitable start configuration.
      * @param start_pose start pose of the motions
      * @param goal_pose goal pose of the motion
-     * @param cartesian_moveit_trajectory the computed trajectory will be stored here
+     * @param plan the computed trajectory will be stored here
      * @return bool indicating success
      */
-//    bool computeStraightLineTrajectory(const geometry_msgs::Pose &start_pose, const geometry_msgs::Pose &goal_pose, moveit_msgs::RobotTrajectory& cartesian_moveit_trajectory);
     bool computeStraightLineTrajectory(const geometry_msgs::Pose &start_pose, const geometry_msgs::Pose &goal_pose, moveit::planning_interface::MoveGroupInterface::Plan& plan);
+
+    /**
+     * @brief setStartStateToTrajectoryEndPoint Setst the start state of the moveit group to the end configuration of the trajectory
+     * @param trajectory trajectory containing the desired state
+     * @param moveit_group object to which this state should be copied.
+     */
+    void setStartStateToTrajectoryEndPoint(const moveit_msgs::RobotTrajectory &trajectory, std::shared_ptr<moveit::planning_interface::MoveGroupInterface> moveit_group);
 
 private:
 

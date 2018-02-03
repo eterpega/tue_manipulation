@@ -232,11 +232,8 @@ void GraspPrecompute::execute(const tue_manipulation_msgs::GraspPrecomputeGoalCo
         {
             ros::Time approach_start_stamp = ros::Time::now();
 
-            moveit_msgs::RobotState start_state;
-            start_state.joint_state.name = my_plan.trajectory_.joint_trajectory.joint_names;
-            unsigned int size = my_plan.trajectory_.joint_trajectory.points.size();
-            start_state.joint_state.position = my_plan.trajectory_.joint_trajectory.points[size-1].positions;
-            moveit_group_->setStartState(start_state);
+            // Update start state
+            setStartStateToTrajectoryEndPoint(my_plan.trajectory_, moveit_group_);
 
             moveit::planning_interface::MoveGroupInterface::Plan my_second_plan;
 
@@ -257,6 +254,7 @@ void GraspPrecompute::execute(const tue_manipulation_msgs::GraspPrecomputeGoalCo
 
             // If still feasible and the entire trajectory is to be executed (FIRST_JOINT_POS_ONLY is false), append trajectory
             // ToDo: make nice!
+            unsigned int size = my_plan.trajectory_.joint_trajectory.points.size();
             if (grasp_feasible && !goal->FIRST_JOINT_POS_ONLY)
             {
                 for (unsigned int i = 1; i < my_second_plan.trajectory_.joint_trajectory.points.size(); i++)
@@ -414,4 +412,16 @@ bool GraspPrecompute::computeStraightLineTrajectory(const geometry_msgs::Pose& s
         return true;
     }
 
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+void GraspPrecompute::setStartStateToTrajectoryEndPoint(const moveit_msgs::RobotTrajectory &trajectory,
+                                                        std::shared_ptr<moveit::planning_interface::MoveGroupInterface> moveit_group)
+{
+    moveit_msgs::RobotState start_state;
+    start_state.joint_state.name = trajectory.joint_trajectory.joint_names;
+    unsigned int size = trajectory.joint_trajectory.points.size();
+    start_state.joint_state.position = trajectory.joint_trajectory.points[size-1].positions;
+    moveit_group->setStartState(start_state);
 }
