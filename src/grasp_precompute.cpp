@@ -188,7 +188,37 @@ void GraspPrecompute::execute(const tue_manipulation_msgs::GraspPrecomputeGoalCo
 
             ros::Duration(0.1).sleep(); // Make sure the robot is at the robot state before setStartState is called
             moveit_group_->setStartStateToCurrentState();
-            grasp_feasible = planTrajectory(waypoints[num_grasp_points-1], my_plan);
+
+            // 'Normal' approach
+//            grasp_feasible = planTrajectory(waypoints[num_grasp_points-1], my_plan);
+
+            // Alternative: use straight line interpolator here as wel...
+            // ToDo: add try/catch
+            // ToDo: aren't there conversion methods to do this bookkeeping?
+
+            tf::StampedTransform start_pose_tf;
+            listener_->lookupTransform(root_link_, tip_link_, ros::Time(0), start_pose_tf);
+            tf::Vector3 position = start_pose_tf.getOrigin();
+            double x = position.getX();
+            double y = position.getY();
+            double z = position.getZ();
+            ROS_INFO("Current [x, y, z]: [%.2f, %.2f, %.2f]", x, y, z);
+            geometry_msgs::Pose start_pose;
+            start_pose.position.x = start_pose_tf.getOrigin().getX();
+            start_pose.position.y = start_pose_tf.getOrigin().getY();
+            start_pose.position.z = start_pose_tf.getOrigin().getZ();
+            tf::Quaternion quat = start_pose_tf.getRotation();
+            start_pose.orientation.x = quat.getX();
+            start_pose.orientation.y = quat.getY();
+            start_pose.orientation.z = quat.getZ();
+            start_pose.orientation.w = quat.getW();
+            grasp_feasible = computeStraightLineTrajectory(start_pose, waypoints[num_grasp_points-1], my_plan);
+
+            ///// TEST STUFF
+//            as_->setAborted(); // ToDo: set failed
+//            return;
+            /////
+
         }
 
         /// If we have a pre-grasp vector, compute the rest of the path
@@ -251,20 +281,6 @@ void GraspPrecompute::execute(const tue_manipulation_msgs::GraspPrecomputeGoalCo
 
     /// Double check joint limits (MoveIt might provide trajectories that are just outside the bounds)
     applyJointLimits(my_plan);
-//    // Loop over all joints
-//    for (unsigned int i = 0; i < my_plan.trajectory_.joint_trajectory.joint_names.size(); i++)
-//    {
-//        std::string joint_name = my_plan.trajectory_.joint_trajectory.joint_names[i];
-//        limits climits = joint_limits_[joint_name];
-
-//        // Loop over all trajectory points
-//        for (unsigned int j = 0; j < my_plan.trajectory_.joint_trajectory.points.size(); j++)
-//        {
-//            my_plan.trajectory_.joint_trajectory.points[j].positions[i] = std::min(std::max(climits.lower,
-//                                                                                  my_plan.trajectory_.joint_trajectory.points[j].positions[i]),
-//                                                                         climits.upper);
-//        }
-//    }
 
     ros::Time planning_stamp = ros::Time::now();
     ROS_DEBUG("Planning took %.2f seconds", (planning_stamp - start_stamp).toSec());
