@@ -59,9 +59,9 @@ void executeCB(const tue_manipulation_msgs::GripperCommandGoalConstPtr& gripper_
                 result.measurement = gripper_meas_;
                 as_->setSucceeded(result, "End position reached.");
                 break;
-            } else if (gripper_meas_.max_torque_reached) {
+            } else if (gripper_meas_.max_force_reached) {
                 ROS_DEBUG("Gripper server reports: Max torque reached");
-                tue_manipulation_msgs::GripperCommandResult result;
+                tue_manipulation_msgs::GripperommandResult result;
                 result.measurement = gripper_meas_;
                 as_->setSucceeded(result, "Max torque reached.");
                 break;
