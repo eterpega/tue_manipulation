@@ -32,7 +32,7 @@ int main (int argc, char **argv) {
 	  return 1;
   }
 
-  goal.command.max_torque = 10;
+  goal.command.max_force = 10;
 
   while(ros::ok()) {
 
